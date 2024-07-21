@@ -1,0 +1,97 @@
+name: Update Homebrew Formula
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-homebrew:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          repository: Anslem1/homebrew-tap
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Set Up GitHub CLI
+        run: sudo apt-get install -y gh
+
+      - name: Get Release Information
+        id: release_info
+        run: |
+          latest_tag=$(gh release view --repo Anslem1/transit-cli --json tagName -q .tagName)
+          echo "latest_tag=$latest_tag" >> $GITHUB_ENV
+
+      - name: Fetch checksums
+        run: |
+          latest_tag=${{ env.latest_tag }}
+          checksums_url="https://github.com/Anslem1/transit-cli/releases/download/${latest_tag}/transit-cli_${latest_tag}_checksums.txt"
+          curl -sL ${checksums_url} -o checksums.txt
+
+      - name: Parse checksums
+        run: |
+          sha256_darwin_amd64=$(grep "darwin_amd64" checksums.txt | cut -d ' ' -f 1)
+          sha256_darwin_arm64=$(grep "darwin_arm64" checksums.txt | cut -d ' ' -f 1)
+          sha256_linux_amd64=$(grep "linux_amd64" checksums.txt | cut -d ' ' -f 1)
+          sha256_linux_arm64=$(grep "linux_arm64" checksums.txt | cut -d ' ' -f 1)
+          sha256_windows_amd64=$(grep "windows_amd64" checksums.txt | cut -d ' ' -f 1)
+          sha256_windows_arm64=$(grep "windows_arm64" checksums.txt | cut -d ' ' -f 1)
+          echo "sha256_darwin_amd64=${sha256_darwin_amd64}" >> $GITHUB_ENV
+          echo "sha256_darwin_arm64=${sha256_darwin_arm64}" >> $GITHUB_ENV
+          echo "sha256_linux_amd64=${sha256_linux_amd64}" >> $GITHUB_ENV
+          echo "sha256_linux_arm64=${sha256_linux_arm64}" >> $GITHUB_ENV
+          echo "sha256_windows_amd64=${sha256_windows_amd64}" >> $GITHUB_ENV
+          echo "sha256_windows_arm64=${sha256_windows_arm64}" >> $GITHUB_ENV
+
+      - name: Update Homebrew Formula
+        run: |
+          latest_tag=${{ env.latest_tag }}
+          sha256_darwin_amd64=${{ env.sha256_darwin_amd64 }}
+          sha256_darwin_arm64=${{ env.sha256_darwin_arm64 }}
+          sha256_linux_amd64=${{ env.sha256_linux_amd64 }}
+          sha256_linux_arm64=${{ env.sha256_linux_arm64 }}
+          sha256_windows_amd64=${{ env.sha256_windows_amd64 }}
+          sha256_windows_arm64=${{ env.sha256_windows_arm64 }}
+          mkdir -p Formula  # Ensure the directory exists
+          cat <<EOF > Formula/transit-cli.rb
+          class TransitCli < Formula
+            desc "Transit is a versatile command-line interface (CLI) tool designed to streamline the workflow of developers in the terminal."
+            homepage "https://github.com/Anslem1/transit-cli"
+            if OS.mac? && Hardware::CPU.intel?
+              url "https://github.com/Anslem1/transit-cli/releases/download/${latest_tag}/transit-cli_${latest_tag}_darwin_amd64.tar.gz"
+              sha256 "${sha256_darwin_amd64}"
+            elsif OS.mac? && Hardware::CPU.arm?
+              url "https://github.com/Anslem1/transit-cli/releases/download/${latest_tag}/transit-cli_${latest_tag}_darwin_arm64.tar.gz"
+              sha256 "${sha256_darwin_arm64}"
+            elsif OS.linux? && Hardware::CPU.intel?
+              url "https://github.com/Anslem1/transit-cli/releases/download/${latest_tag}/transit-cli_${latest_tag}_linux_amd64.tar.gz"
+              sha256 "${sha256_linux_amd64}"
+            elsif OS.linux? && Hardware::CPU.arm?
+              url "https://github.com/Anslem1/transit-cli/releases/download/${latest_tag}/transit-cli_${latest_tag}_linux_arm64.tar.gz"
+              sha256 "${sha256_linux_arm64}"
+            elsif OS.windows? && Hardware::CPU.intel?
+              url "https://github.com/Anslem1/transit-cli/releases/download/${latest_tag}/transit-cli_${latest_tag}_windows_amd64.zip"
+              sha256 "${sha256_windows_amd64}"
+            elsif OS.windows? && Hardware::CPU.arm?
+              url "https://github.com/Anslem1/transit-cli/releases/download/${latest_tag}/transit-cli_${latest_tag}_windows_arm64.zip"
+              sha256 "${sha256_windows_arm64}"
+            end
+            def install
+              bin.install "transit-cli" => "transit"
+            end
+            test do
+              system "#{bin}/transit", "--version"
+            end
+          end
+          EOF
+
+      - name: Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Update Homebrew formula for  ${{ env.latest_tag }}
+          branch: main
+          file_pattern: Formula/transit-cli.rb
