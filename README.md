@@ -23,23 +23,23 @@ transit create my-transit-name
 ```bash
 transit add my-transit-name
 ```
-**edit a command in transit:** edits an existing command in a transit.
+**Edit a command in transit:** edits an existing command in a transit.
 ```bash
 transit edit my-transit-name
 ```
 **Search a command in transit:** This looks through all your transits and search for a the specified command.
 ```bash
-transit edit my-transit-name
+transit search my-transit-name
 ```
-**removing command in a transit:** removes commands within an existing transi.
+**Eemoving command in a transit:** removes commands within an existing transi.
 ```bash
 transit remove my-transit-name
 ```
-**reordering commands in a transit:** Changes the order at which commands are placed within a transit.
+**Reordering commands in a transit:** Changes the order at which commands are placed within a transit.
 ```bash
 transit reorder my-transit-name
 ```
-**list a transit:** Lists commands within a transit.
+**List a transit:** Lists commands within a transit.
 ```bash
 transit list my-transit-name
 ```
