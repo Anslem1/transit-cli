@@ -27,7 +27,7 @@ transit add my-transit-name
 ```bash
 transit edit my-transit-name
 ```
-**Search a command in transit:** This looks through all your transits and search for a the specified command.
+**Search a command in transit:** This looks through all your transits and search for the specified command.
 ```bash
 transit search my-transit-name
 ```
