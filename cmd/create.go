@@ -2,42 +2,49 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/Anslem1/transit/cmd/middleware"
-	"github.com/Anslem1/transit/cmd/middleware/middleware2"
+	"log"
+
+	"github.com/Anslem1/transit/internal/transit"
+	"github.com/Anslem1/transit/internal/ui"
 	"github.com/spf13/cobra"
 )
 
-var (
-	CreateCmd = &cobra.Command{
-		Use:           "create <transit(s)>",
-		Short:         "Creates one or more empty transits",
-		Long:          `Use "transit create <transit(s)>" to create one or more empty transits.`,
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		Run: func(cmd *cobra.Command, args []string) {
-			if len(args) == 0 {
-				err := middleware2.NewTransitError(1, "Expected at least one transit name to be provided but got none")
-				if transitErr, ok := err.(*middleware2.TransitError); ok {
-					fmt.Printf("Error: %s\n", transitErr.Message)
-				} else {
-					fmt.Println(err)
-				}
+var localCreate bool
+
+var CreateCmd = &cobra.Command{
+	Use:           "create [transit name(s)]",
+	Short:         "Creates one or more empty transits",
+	Long:          `Use "transit create <transit-name>" to create one or more transits. Use --local to create in project-local .transit.yaml.`,
+	SilenceErrors: true,
+	SilenceUsage:  true,
+	Run: func(cmd *cobra.Command, args []string) {
+		names := args
+		if len(names) == 0 {
+			name, err := ui.PromptInput("Enter transit name")
+			if err != nil || name == "" {
+				fmt.Println("No transit name provided. Exiting.")
 				return
 			}
+			names = []string{name}
+		}
 
-			success, err := middleware.CreateEmptyTransit(args)
+		for _, name := range names {
+			err := transit.CreateTransit(name, []string{}, localCreate)
 			if err != nil {
-				if transitErr, ok := err.(*middleware2.TransitError); ok {
-					fmt.Printf("%s", transitErr.Message)
-				} else {
-					fmt.Println(err)
-				}
-			} else if success {
-				fmt.Println("Transit(s) created successfully.")
+				log.SetFlags(0)
+				log.Printf("Error creating transit '%s': %v\n", name, err)
+				continue
 			}
-		},
-	}
-)
+			scope := "global"
+			if localCreate {
+				scope = "local (.transit.yaml)"
+			}
+			fmt.Printf("✓ Created %s transit '%s'. Add commands using 'transit add %s'.\n", scope, name, name)
+		}
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(CreateCmd)
+	CreateCmd.Flags().BoolVarP(&localCreate, "local", "l", false, "Create transit in project-local .transit.yaml")
 }

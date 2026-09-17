@@ -5,57 +5,90 @@ import (
 	"log"
 	"strings"
 
-	"github.com/Anslem1/transit/cmd/middleware"
+	"github.com/Anslem1/transit/internal/transit"
+	"github.com/Anslem1/transit/internal/ui"
 	"github.com/spf13/cobra"
 )
 
-var (
-	addCmd = &cobra.Command{
-		Use:   "add <transit name>",
-		Short: "Adds new commands to a transit configuration",
-		Long: `
-			adds one or more commands to an existing transit.
+var addCmd = &cobra.Command{
+	Use:               "add [transit name] [commands...]",
+	Short:             "Adds new commands to a transit configuration",
+	Long:              `Adds one or more commands to an existing transit. You can specify commands on the command line or enter them interactively.`,
+	ValidArgsFunction: TransitNameCompletion,
+	Run: func(cmd *cobra.Command, args []string) {
+		var tr *transit.Transit
 
-	Use this command to add commands to a specific transit for later execution. 
-	You will be prompted to enter commands interactively.
-`,
-		Run: func(cmd *cobra.Command, args []string) {
-			var transitName string
-			if len(args) == 0 {
-				var err error
-				_, transitName, err = middleware.ListTransit("add")
-				if err != nil {
-					log.SetFlags(0)
-					log.Fatalf("Error fetching list of transits: %v", err)
+		if len(args) == 0 {
+			var err error
+			tr, err = ui.SelectTransit("add commands to")
+			if err != nil {
+				log.SetFlags(0)
+				log.Fatalf("Error selecting transit: %v", err)
+			}
+		} else {
+			transitName := strings.TrimSuffix(args[0], ".yaml")
+			var err error
+			tr, err = transit.GetTransit(transitName)
+			if err != nil {
+				log.SetFlags(0)
+				log.Fatalf("Error reading transit '%s': %v", transitName, err)
+			}
+		}
+
+		if tr == nil {
+			fmt.Println("No transit selected. Exiting.")
+			return
+		}
+
+		existingMap := make(map[string]bool)
+		for _, c := range tr.Commands {
+			existingMap[c] = true
+		}
+
+		var addedCommands []string
+
+		// Add commands passed via CLI args
+		if len(args) > 1 {
+			for _, c := range args[1:] {
+				c = strings.TrimSpace(c)
+				if c != "" && !existingMap[c] {
+					tr.Commands = append(tr.Commands, c)
+					existingMap[c] = true
+					addedCommands = append(addedCommands, c)
 				}
+			}
+		} else {
+			// Interactive input loop
+			fmt.Println("Enter commands to add (leave blank to finish):")
+			for {
+				command, err := ui.PromptInput("New command")
+				if err != nil || command == "" {
+					break
+				}
+				if existingMap[command] {
+					fmt.Printf("⚠️  Command '%s' already in transit '%s', skipped\n", command, tr.Name)
+					continue
+				}
+				tr.Commands = append(tr.Commands, command)
+				existingMap[command] = true
+				addedCommands = append(addedCommands, command)
+			}
+		}
 
-			} else {
-				transitName = strings.Split(args[0], ".yaml")[0]
+		if len(addedCommands) > 0 {
+			if err := transit.SaveTransit(tr); err != nil {
+				log.SetFlags(0)
+				log.Fatalf("Failed to save transit: %v", err)
 			}
-			if transitName == "" {
-				fmt.Println("No transit selected. Exiting.")
-				return
+			for _, c := range addedCommands {
+				fmt.Printf("✓ Added command: %s\n", c)
 			}
-			_, err := middleware.ReadCommandsInTransit(strings.Split(transitName, ".yaml")[0])
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-
-			// Prompt for initial command(s) to add
-			var initialCommands []string
-			if len(args) > 1 {
-				initialCommands = args[1:]
-			}
-
-			transitName = strings.Split(transitName, ".yaml")[0]
-			err = middleware.AddCommandsToTransit(transitName, initialCommands)
-			if err != nil {
-				fmt.Printf("Failed to add commands to transit %s: %v\n", transitName, err)
-			}
-		},
-	}
-)
+			fmt.Printf("Successfully added %d command(s) to '%s'\n", len(addedCommands), tr.Name)
+		} else {
+			fmt.Println("No new commands were added.")
+		}
+	},
+}
 
 func init() {
 	rootCmd.AddCommand(addCmd)

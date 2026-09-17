@@ -5,31 +5,46 @@ import (
 	"log"
 	"strings"
 
-	"github.com/Anslem1/transit/cmd/middleware"
+	"github.com/Anslem1/transit/internal/transit"
+	"github.com/Anslem1/transit/internal/ui"
 	"github.com/spf13/cobra"
 )
 
-var (
-	listCmd = &cobra.Command{
-		Use:   "list [transit name]",
-		Short: "List available Transits or commands in a specified Transit",
-		Long:  `List all available transits stored in the transit/cmds directory, or list commands in a specified transit.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			if len(args) == 0 {
-				listAllTransits()
-			} else {
-				listCommandsInTransit(args[0])
-			}
-		},
-	}
-)
+var listAllFlag bool
 
-func init() {
-	rootCmd.AddCommand(listCmd)
+var listCmd = &cobra.Command{
+	Use:               "list [transit name]",
+	Short:             "List available Transits or commands in a specified Transit",
+	Long:              `List all available transits, or display commands inside a specific transit. Use --all to list all transits without prompting.`,
+	ValidArgsFunction: TransitNameCompletion,
+	Run: func(cmd *cobra.Command, args []string) {
+		if listAllFlag {
+			printAllTransitsSummary()
+			return
+		}
+
+		if len(args) == 0 {
+			tr, err := ui.SelectTransit("list commands for")
+			if err != nil {
+				log.SetFlags(0)
+				log.Fatalf("Error: %v", err)
+			}
+			printTransitCommands(tr)
+			return
+		}
+
+		transitName := strings.TrimSuffix(args[0], ".yaml")
+		tr, err := transit.GetTransit(transitName)
+		if err != nil {
+			log.SetFlags(0)
+			log.Fatalf("Error reading transit '%s': %v", transitName, err)
+		}
+		printTransitCommands(tr)
+	},
 }
 
-func listAllTransits() {
-	transits, selectedTransits, err := middleware.ListTransit("list")
+func printAllTransitsSummary() {
+	transits, err := transit.ListTransits()
 	if err != nil {
 		log.SetFlags(0)
 		log.Fatalf("Error listing transits: %v", err)
@@ -38,32 +53,33 @@ func listAllTransits() {
 		fmt.Println("No transits found.")
 		return
 	}
-	withoutType := strings.Split(selectedTransits, ".yaml")[0]
-	listCommands(withoutType)
-}
-
-func listCommandsInTransit(transitName string) {
-	commands, err := middleware.ReadCommandsInTransit(transitName)
-	if err != nil {
-			log.SetFlags(0)
-		log.Fatalf("Error reading transit: %v", err)
-	}
-
-	fmt.Printf("Commands in transit %s:\n", transitName)
-	for _, cmd := range commands {
-		fmt.Println(" -", cmd)
+	fmt.Println("Available Transits:")
+	for _, t := range transits {
+		scope := "global"
+		if t.IsLocal {
+			scope = "local (.transit.yaml)"
+		}
+		fmt.Printf(" • %-20s (%d commands) [%s]\n", t.Name, len(t.Commands), scope)
 	}
 }
 
-func listCommands(transitName string) {
-	commands, err := middleware.ReadCommandsInTransit(transitName)
-	if err != nil {
-				log.SetFlags(0)
-		log.Fatalf("Error reading transit: %v", err)
+func printTransitCommands(tr *transit.Transit) {
+	scope := "global"
+	if tr.IsLocal {
+		scope = "local (.transit.yaml)"
 	}
+	fmt.Printf("\nCommands in transit '%s' [%s]:\n", tr.Name, scope)
+	if len(tr.Commands) == 0 {
+		fmt.Println("  (no commands)")
+		return
+	}
+	for i, cmd := range tr.Commands {
+		fmt.Printf("  %d. %s\n", i+1, cmd)
+	}
+	fmt.Println()
+}
 
-	fmt.Printf("Commands in transit %s:\n", transitName)
-	for _, cmd := range commands {
-		fmt.Println(" -", cmd)
-	}
+func init() {
+	rootCmd.AddCommand(listCmd)
+	listCmd.Flags().BoolVarP(&listAllFlag, "all", "a", false, "List all transits with a summary of their commands")
 }

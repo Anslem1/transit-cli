@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"log"
 	"os"
+
+	"github.com/Anslem1/transit/internal/transit"
+	"github.com/spf13/cobra"
 )
 
 var longDesc = `Welcome to Transit
@@ -59,7 +61,7 @@ var (
 	// cfgFile string
 
 	rootCmd = &cobra.Command{
-		Use:   "Transit",
+		Use:   "transit",
 		Short: "Transit is a CLI tool for managing and executing commands",
 		Long:  longDesc,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -70,6 +72,18 @@ var (
 		},
 	}
 )
+
+// TransitNameCompletion provides shell autocompletion for existing transit names.
+func TransitNameCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) != 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	transits, err := transit.ListTransitNames()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	return transits, cobra.ShellCompDirectiveNoFileComp
+}
 
 // Execute executes the root command.
 func Execute() {

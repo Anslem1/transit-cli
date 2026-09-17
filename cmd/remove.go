@@ -5,81 +5,63 @@ import (
 	"log"
 	"strings"
 
-	"github.com/Anslem1/transit/cmd/middleware"
+	"github.com/Anslem1/transit/internal/transit"
+	"github.com/Anslem1/transit/internal/ui"
 	"github.com/spf13/cobra"
 )
 
-var (
-	removeCmd = &cobra.Command{
-		Use:   "remove <transit name>",
-		Short: "Removes command(s) from a transit",
-		Long: `
-Remove one or more commands from an existing transit.
+var removeCmd = &cobra.Command{
+	Use:               "remove [transit name]",
+	Short:             "Removes command(s) from a transit",
+	Long:              `Remove a command from an existing transit interactively.`,
+	ValidArgsFunction: TransitNameCompletion,
+	Run: func(cmd *cobra.Command, args []string) {
+		var tr *transit.Transit
 
-Use this command to remove specific commands from a transit configuration.
-You will be prompted to select commands by their number to remove interactively.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			var transitName string
-			if len(args) == 0 {
-				var err error
-				_, transitName, err = middleware.ListTransit("remove")
-				if err != nil {
-					log.SetFlags(0)
-					log.Fatalf("Error fetching list of transits: %v", err)
-				}
-			} else {
-				transitName = strings.Split(args[0], ".yaml")[0]
-			}
-			if transitName == "" {
-				fmt.Println("No transit selected. Exiting.")
-				return
-			}
-			// Fetch existing commands from the transit
-			transitName = strings.Split(transitName, ".yaml")[0]
-			commands, err := middleware.ReadCommandsInTransit(transitName)
+		if len(args) == 0 {
+			var err error
+			tr, err = ui.SelectTransit("remove command from")
 			if err != nil {
 				log.SetFlags(0)
-				log.Fatalf("Failed to fetch commands from transit %s: %v", transitName, err)
-				return
+				log.Fatalf("Error: %v", err)
 			}
-
-			if len(commands) == 0 {
-				fmt.Printf("Transit '%s' does not contain any commands.\n", transitName)
-				return
-			}
-
-			// Prompt user to select commands to remove
-			selectedCommands, err := middleware.GetUserSelectedCommands(commands)
+		} else {
+			transitName := strings.TrimSuffix(args[0], ".yaml")
+			var err error
+			tr, err = transit.GetTransit(transitName)
 			if err != nil {
 				log.SetFlags(0)
-				log.Fatalf("Failed to select commands for removal: %v", err)
-				return
+				log.Fatalf("Error reading transit '%s': %v", transitName, err)
 			}
+		}
 
-			if len(selectedCommands) == 0 {
-				fmt.Println("No commands selected for removal. Exiting.")
-				return
-			}
+		if tr == nil {
+			fmt.Println("No transit selected. Exiting.")
+			return
+		}
 
-			// Display the commands that are set to be deleted
-			fmt.Printf("Commands set to be removed from transit '%s':\n", transitName)
-			for _, cmd := range selectedCommands {
-				fmt.Printf("- %s\n", cmd)
-			}
+		if len(tr.Commands) == 0 {
+			fmt.Printf("Transit '%s' has no commands to remove.\n", tr.Name)
+			return
+		}
 
-			// Remove selected commands from the transit
-			transitName = strings.Split(transitName, ".yaml")[0]
-			err = middleware.RemoveCommandsFromTransit(transitName, selectedCommands)
-			if err != nil {
-				log.SetFlags(0)
-				log.Fatalf("Failed to remove commands from transit %s: %v", transitName, err)
-				return
-			}
+		index, selectedCmd, err := ui.SelectCommand("Select command to remove", tr.Commands)
+		if err != nil {
+			log.SetFlags(0)
+			log.Fatalf("Removal cancelled: %v", err)
+		}
 
-			fmt.Printf("Removed %d command(s) from transit '%s'\n", len(selectedCommands), transitName)
-		},
-	}
-)
+		// Remove from slice
+		tr.Commands = append(tr.Commands[:index], tr.Commands[index+1:]...)
+
+		if err := transit.SaveTransit(tr); err != nil {
+			log.SetFlags(0)
+			log.Fatalf("Failed to save transit '%s': %v", tr.Name, err)
+		}
+
+		fmt.Printf("✓ Removed '%s' from transit '%s'\n", selectedCmd, tr.Name)
+	},
+}
 
 func init() {
 	rootCmd.AddCommand(removeCmd)
