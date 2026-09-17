@@ -70,10 +70,13 @@ jobs:
       - name: Update Homebrew Formula
         run: |
           mkdir -p Formula
+          VERSION="${RELEASE_TAG#v}"
           {
             echo "class TransitCli < Formula"
             echo "  desc \"Transit is an interactive CLI tool designed to streamline developer workflows with sequential and concurrent command execution.\""
             echo "  homepage \"https://github.com/Anslem1/transit-cli\""
+            echo "  version \"${VERSION}\""
+            echo ""
             echo "  if OS.mac? && Hardware::CPU.intel?"
             echo "    url \"https://github.com/Anslem1/transit-cli/releases/download/${RELEASE_TAG}/transit-cli_${RELEASE_TAG}_darwin_amd64.tar.gz\""
             echo "    sha256 \"${SHA_DARWIN_AMD64}\""
