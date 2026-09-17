@@ -1,12 +1,16 @@
 version: 2
 
+project_name: transit-cli
+
 before:
   hooks:
     - go mod tidy
     - go generate ./...
 
 builds:
-  - env:
+  - id: transit
+    binary: transit-cli
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
@@ -17,6 +21,8 @@ builds:
       - 386
       - arm64
       - arm
+    ldflags:
+      - -s -w -X github.com/Anslem1/transit/cmd.Version={{.Version}}
 
 archives:
   - format: tar.gz
