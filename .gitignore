@@ -24,7 +24,7 @@ go.work.sum
 
 flow.txt
 vendor
-transit
+/transit
 ideas
 dist/
 .goreleaser
